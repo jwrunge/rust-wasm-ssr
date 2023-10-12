@@ -1,61 +1,93 @@
-pub trait StoreFunctionality<T> {
+use std::collections::HashMap;
+
+pub trait StoreFunctionality {
     fn initialize_from_upstream_origins(&mut self);
-    fn add_downstream(&mut self, store: Box<dyn StoreFunctionality<T>>);
+    fn add_downstream(&mut self, key: String, store: Box<dyn StoreFunctionality>);
+    fn get_upstream(&self) -> &HashMap<String, Box<dyn StoreFunctionality>>;
     fn report_downstream(&self);
 }
 
 pub struct Store<T> {
     //State
-    value: Option<T>,
-    pub initializer: Option<Box<dyn Fn() -> Option<T>>>,
+    value: T,
+    pub initializer: Option<fn(&Self) -> T>,
     subscriptions: Vec<Box<dyn Fn(&T) -> ()>>,
 
     //Derivation
-    upstream_stores: Vec<Box<dyn StoreFunctionality<T>>>,
-    downstream_stores: Vec<Box<dyn StoreFunctionality<T>>>,
+    upstream_stores: HashMap<String, Box<dyn StoreFunctionality>>,
+    downstream_stores: HashMap<String, Box<dyn StoreFunctionality>>,
 }
 
 impl<T> Store<T> {
-    pub fn new(init_func: Option<Box<dyn Fn()-> Option<T>>>, val: Option<T>) -> Store<T> {
-        Store {
-            value: val,
-            initializer: init_func,
-            subscriptions: Vec::new(),
-            upstream_stores: Vec::new(),
-            downstream_stores: Vec::new(),
+    pub fn new(
+        val: T,
+        init_func: Option<fn(&Self)-> T>,
+        upstream_stores: Option<HashMap<String, Box<dyn StoreFunctionality>>>,
+    ) -> Store<T> {
+        let ustores = match upstream_stores {
+            Some(stores) => stores,
+            None => HashMap::new(),
+        };
+        match init_func {
+            Some(_) => {
+                let mut store = Store {
+                    value: val,
+                    initializer: init_func,
+                    subscriptions: Vec::new(),
+                    upstream_stores: ustores,
+                    downstream_stores: HashMap::new(),
+                };
+                store.initialize_from_upstream_origins();
+                store
+            }
+            None => Store {
+                value: val,
+                initializer: init_func,
+                subscriptions: Vec::new(),
+                upstream_stores: ustores,
+                downstream_stores: HashMap::new(),
+            },
         }
     }
 
-    pub fn get(&self) -> &Option<T> {
+    pub fn get(&self) -> &T {
         &self.value
     }
 
-    pub fn update(&mut self, new_value: Option<T>) {
+    pub fn update(&mut self, new_value: T) {
         self.value = new_value;
         self.report_downstream();
     }
 }
 
-impl<T> StoreFunctionality<T> for Store<T> {
+impl<T> StoreFunctionality for Store<T> {
     //(re)initialize the store from upstream stores
     fn initialize_from_upstream_origins(&mut self) {
-        match &self.initializer {
+        match self.initializer {
             Some(value) => {
-                self.value = (value)();
+                let new_value = (value)(&self);
+                self.update(new_value);
             }
             None => {}
         };
     }
 
     //Add a downstream store (to be updated when this store is updated)
-    fn add_downstream(&mut self, store: Box<dyn StoreFunctionality<T>>) {
-        self.downstream_stores.push(store);
+    fn add_downstream(&mut self, key: String, store: Box<dyn StoreFunctionality>) {
+        self.downstream_stores.insert(key, store);
+    }
+
+    fn get_upstream(&self) -> &HashMap<String, Box<dyn StoreFunctionality>> {
+        &self.upstream_stores 
     }
 
     //Report value changes to all downstream stores
     fn report_downstream(&self) {
-        for store in self.downstream_stores.iter() {
+        for (_, store) in self.downstream_stores.iter() {
             store.report_downstream();
+        }
+        for subscription in self.subscriptions.iter() {
+            subscription(&self.value);
         }
     }
 }
