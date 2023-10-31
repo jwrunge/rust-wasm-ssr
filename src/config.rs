@@ -1,10 +1,10 @@
-mod config {
+pub mod config {
     use serde::Deserialize;
     use std::fs;
     use toml;
 
     #[derive(Deserialize)]
-    enum ExtensionBehavior {
+    pub enum ExtensionBehavior {
         Deny,                    //Disallow the extension from returning
         Fetch,                   //Fetch the file and return it
         ProcessCode,             //Map the request to a function
@@ -13,9 +13,12 @@ mod config {
     }
 
     #[derive(Deserialize)]
-    struct Config {
-        default_behavior: ExtensionBehavior,
-        extension_behaviors: Vec<(String, ExtensionBehavior)>,
+    pub struct Config {
+        pub listen_on: String,
+        pub serve_root: String,
+        pub watch_dirs: Vec<String>,
+        pub default_behavior: ExtensionBehavior,
+        pub extension_behaviors: Vec<(String, ExtensionBehavior)>,
     }
 
     impl Config {
