@@ -1,0 +1,5 @@
+default_behavior = "Deny"
+extension_behaviors = [
+    [ ".html", "Fetch" ],
+    [ ".temp", "FetchAndProcessTemplate" ],
+]
