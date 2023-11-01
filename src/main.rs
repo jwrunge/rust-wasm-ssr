@@ -9,14 +9,14 @@ mod config;
 
 #[tokio::main]
 async fn main() {
-    //Get config file
+    //Get config file - default to config.toml
     let env_args: Vec<String> = env::args().collect();
     let config_path = match env_args.len() {
         1 => String::from("config.toml"),
         2 => env_args[1].clone(),
         _ => panic!("Too many arguments"),
     };
-    let cfg = config::config::Config::new(config_path);
+    let cfg = config::Config::new(config_path);
 
     //Set up app and listener
     let app: Router;
@@ -32,7 +32,10 @@ async fn main() {
                 parts => {
                     let mut ip: [u8; 4] = [0, 0, 0, 0];
                     for (i, part) in parts.enumerate() {
-                        ip[i] = part.parse::<u8>().unwrap();
+                        ip[i] = match part.parse::<u8>() {
+                            Ok(p) => p,
+                            Err(_) => 0,
+                        };
                     }
                     ip
                 }
