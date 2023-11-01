@@ -1,5 +1,6 @@
-use axum::{routing::get, Router};
+use axum::{routing::{get, MethodRouter}, Router};
 use std::{
+    fs,
     env,
     str,
     net::SocketAddr,
@@ -9,62 +10,59 @@ mod config;
 
 #[tokio::main]
 async fn main() {
-    //Get config file - default to config.toml
-    let env_args: Vec<String> = env::args().collect();
-    let config_path = match env_args.len() {
-        1 => String::from("config.toml"),
-        2 => env_args[1].clone(),
-        _ => panic!("Too many arguments"),
-    };
-    let cfg = config::Config::new(config_path);
+    let cfg = config::Config::new(env::args());
+    let (ip, port) = cfg.parse_ip_port();
 
-    //Set up app and listener
-    let app: Router;
-    let addr: SocketAddr;
+    //Set up app
+    let mut router = Router::new();
+    let addr = SocketAddr::from((ip, port));
 
-    {
-        let mut split = cfg.listen_on.split(":");
-
-        //Parse out IP (default to 127.0.0.1)
-        let ip: [u8; 4] = match split.next().unwrap() {
-            "localhost" => [127, 0, 0, 1],
-            s => match s.split(".") {
-                parts => {
-                    let mut ip: [u8; 4] = [0, 0, 0, 0];
-                    for (i, part) in parts.enumerate() {
-                        ip[i] = match part.parse::<u8>() {
-                            Ok(p) => p,
-                            Err(_) => 0,
-                        };
-                    }
-                    ip
-                }
-            }
-        };
-
-        //Set port (default to 3000)
-        let port = match split.next() {
-            Some(p) => match p.parse::<u16>() {
-                Ok(p) => p,
-                Err(_) => 3000,
-            },
-            None => 3000,
-        };
-
-        //Set up app
-        app = Router::new().route("/", get(handler));
-        addr = SocketAddr::from((ip, port));
+    //Set up routes
+    for (route, handler) in assign_handlers(cfg.serve_root.as_deref()) {
+        router = router.route(route, get(handler));
     }
 
-    //Set up server
-    let addr = SocketAddr::from(addr);
-
     axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+        .serve(router.into_make_service())
         .await
         .unwrap();
 }
 
-async fn handler() -> &'static str {
-    "Hello, World!"
+fn assign_handlers(root: Option<&str>) -> Vec<(&str, MethodRouter)> {
+    //Check for serve_root; default to 'public'
+    let root = match root {
+        Some(s) => s,
+        None => "./public",
+    };
+
+    //Look for routes in serve_root
+    let path = fs::read_dir(root).expect(&format!("Unable to access serve_root directory '{}'", &root));
+    let routes = Vec::new();
+    for entry in path {
+        match entry {
+            Ok(entry) => {
+                let path = entry.path();
+                if path.is_dir() {
+                    //Recurse into directory
+                } else if path.is_file() {
+
+                }
+            },
+            Err(_) => {},
+        }
+    }
+
+    routes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_assign_handlers() {
+        let root = Some("./public");
+        let routes = assign_handlers(root);
+        assert_eq!(routes.len(), 2);
+    }
 }

@@ -1,4 +1,4 @@
-listen_on = "172.0.0.1:8080"
+listen_on = "127.0.0.1"
 serve_root = "/var/www/html"
 watch_dirs = [
     "/var/www/html",
