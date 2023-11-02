@@ -28,22 +28,26 @@ async fn main() {
         .unwrap();
 }
 
-fn assign_handlers(root: Option<&str>) -> Vec<(&str, MethodRouter)> {
-    //Check for serve_root; default to 'public'
-    let root = match root {
+fn assign_handlers(dir: Option<&str>) -> Vec<(&str, MethodRouter)> {
+    //Check for root dir; default to 'public'
+    let dir = match dir {
         Some(s) => s,
-        None => "./public",
+        None => return vec![],
     };
 
     //Look for routes in serve_root
-    let path = fs::read_dir(root).expect(&format!("Unable to access serve_root directory '{}'", &root));
-    let routes = Vec::new();
-    for entry in path {
+    let dir_path = fs::read_dir(dir).expect(&format!("Unable to access serve_root directory '{}'", &dir));
+    let mut routes = Vec::new();
+    for entry in dir_path {
         match entry {
             Ok(entry) => {
                 let path = entry.path();
                 if path.is_dir() {
-                    //Recurse into directory
+                    //Recurse into subdirectories
+                    let subroutes = assign_handlers(path.to_str());
+                    for route in subroutes {
+                        routes.push(route)
+                    }
                 } else if path.is_file() {
 
                 }
