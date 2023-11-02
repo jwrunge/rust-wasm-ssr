@@ -4,7 +4,7 @@ error_directory = "/var/www/html/errors"
 watch_dirs = [
     "/var/www/html",
 ]
-default_behavior = "Deny"
+default_behavior = "ProcessCode"
 extension_behaviors = [
     [ ".html", "Fetch" ],
     [ ".temp", "FetchAndProcessTemplate" ],

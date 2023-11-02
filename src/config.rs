@@ -1,11 +1,12 @@
 use serde::Deserialize;
-use std::fs;
+use std::{fs, path::PathBuf, cell::RefCell};
 use toml;
 
+#[cfg(debug_assertions)]
 const TEST_CONFIG_PATH: &'static str = "./_test_files/config.toml";
 
-#[derive(Debug)]
 #[derive(Deserialize)]
+#[derive(Clone)]
 pub enum ExtensionBehavior {
     Deny,                    //Disallow the extension from returning
     Fetch,                   //Fetch the file and return it
@@ -19,7 +20,7 @@ pub struct Config {
     pub listen_on: Option<String>,
     pub serve_root: Option<String>,
     pub watch_dirs: Option<Vec<String>>,
-    pub default_behavior: Option<ExtensionBehavior>,
+    pub default_behavior: RefCell<Option<ExtensionBehavior>>,
     pub extension_behaviors: Option<Vec<(String, ExtensionBehavior)>>,
 }
 
@@ -32,10 +33,33 @@ impl Config {
                 )
             )
             .expect("Unable to parse config file");
+
+        //Make sure default_behavior is correct - must be Deny or ProcessCode; default to Deny
+        let mut set_default_behavior = false;
+        match *config.default_behavior.borrow() {
+            Some(ExtensionBehavior::Deny) => (),
+            Some(ExtensionBehavior::ProcessCode) => (),
+            None => set_default_behavior = true,
+            _ => panic!("Default behavior must be 'Deny' or 'ProcessCode'"),
+        }
+        if set_default_behavior {
+            config.set_default_behavior(ExtensionBehavior::Deny);
+        }
+
         config
     }
 
-    pub fn parse_ip_port(&self)-> ([u8; 4], u16) {
+    /*
+     * Internal mutations
+    */
+    fn set_default_behavior(&self, behavior: ExtensionBehavior) {
+        *self.default_behavior.borrow_mut() = Some(behavior);
+    }
+
+    /*
+     * Getters
+    */
+    pub fn get_listen_on(&self)-> ([u8; 4], u16) {
         //Get config IP and port; default to 127.0.0.1:8080
         let mut split = match &self.listen_on {
             Some(s) => s.split(":"),
@@ -70,6 +94,30 @@ impl Config {
         };
 
         (ip, port)
+    }
+
+    pub fn get_serve_root(&self)-> PathBuf {
+        //Get config serve_root; default to "./public"
+        match &self.serve_root {
+            Some(s) => PathBuf::from(s),
+            None => PathBuf::from("./public"),
+        }
+    }
+
+    pub fn _get_watch_dirs(&self)-> Vec<PathBuf> {
+        match self.watch_dirs {
+            Some(ref dirs) => {
+                dirs.iter().map(|dir| PathBuf::from(dir)).collect()
+            },
+            None => Vec::new(),
+        }
+    }
+
+    pub fn _get_default_behavior(&self)-> ExtensionBehavior {
+        match (*self.default_behavior.borrow()).clone() {
+            Some(behavior) => behavior,
+            None => panic!("Default behavior must be 'Deny' or 'ProcessCode'"),
+        }
     }
 }
 
@@ -108,45 +156,69 @@ fn fallback_file()-> String {
 mod tests {
     use super::*;
 
-    // Test config file load
-    #[test]
-    fn test_new_config() {
-        let args = vec![
-            String::from(""),
-            String::from(TEST_CONFIG_PATH),
-        ].into_iter();
+    enum TestConfig {
+        Default,
+        Uninitialized,
+    }
 
-        let config = Config::new(args);
-
-        match config.default_behavior {
-            Some(ExtensionBehavior::Deny) => (),
-            _ => panic!("Default behavior should be 'Deny'"),
-        }
-
-        assert_eq!(config.extension_behaviors.as_ref().unwrap()[0].0, String::from(".html"));
-        match config.extension_behaviors.as_ref().unwrap()[0].1 {
-            ExtensionBehavior::Fetch => (),
-            _ => panic!("Default behavior should be 'Fetch'"),
-        }
-
-        assert_eq!(config.extension_behaviors.as_ref().unwrap()[1].0, String::from(".temp"));
-        match config.extension_behaviors.as_ref().unwrap()[1].1 {
-            ExtensionBehavior::FetchAndProcessTemplate => (),
-            _ => panic!("Default behavior should be 'Fetch'"),
-        }
+    fn get_test_config(config_type: TestConfig) -> Config {
+        Config::new(
+            match config_type {
+                TestConfig::Default => {
+                    vec![
+                        String::from(""),
+                        String::from(TEST_CONFIG_PATH),
+                    ].into_iter()
+                },
+                TestConfig::Uninitialized => {
+                    vec![
+                        String::from(""),
+                        String::from("_test_files/config.uninitialized.toml"),
+                    ].into_iter()
+                },
+            }
+        )
     }
 
     // Test config file address return
     #[test]
     fn test_config_ip_port_return() {
-        let args = vec![
-            String::from(""),
-            String::from(TEST_CONFIG_PATH),
-        ].into_iter();
-
-        let config = Config::new(args);
-
-        let (ip, port) = config.parse_ip_port();
+        let config = get_test_config(TestConfig::Default);
+        let (ip, port) = config.get_listen_on();
         println!("IP: {}.{}.{}.{}, PORT: {}", ip[0], ip[1], ip[2], ip[3], port);
+        assert_eq!(ip, [127, 0, 0, 1]);
+        assert_eq!(port, 8080);
+    }
+
+    #[test]
+    fn test_get_serve_root() {
+        //Test from standard config file
+        let config = get_test_config(TestConfig::Default);
+        let serve_root = config.get_serve_root();
+        println!("Serve root: {}", serve_root.display());
+        assert_eq!(serve_root, PathBuf::from("/var/www/html"));
+
+        //Test from config file, unitialized serve root
+        let config = get_test_config(TestConfig::Uninitialized);
+        let serve_root = config.get_serve_root();
+        println!("Serve root: {}", serve_root.display());
+        assert_eq!(serve_root, PathBuf::from("./public"));
+    }
+
+    #[test]
+    fn test_behaviors() {
+        //Test default behavior from standard config file
+        let config = get_test_config(TestConfig::Default);
+        assert!(match *config.default_behavior.borrow() {
+            Some(ExtensionBehavior::ProcessCode) => true,
+            _ => panic!("Default behavior should be 'Deny' or 'ProcessCode'"),
+        });
+
+        //Test default behavior from config file, unitialized default behavior
+        let config = get_test_config(TestConfig::Uninitialized);
+        assert!(match *config.default_behavior.borrow() {
+            Some(ExtensionBehavior::Deny) => true,
+            _ => panic!("Default behavior should be 'Deny' or 'ProcessCode'"),
+        });
     }
 }
