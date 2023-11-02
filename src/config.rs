@@ -218,7 +218,7 @@ mod tests {
         let config = get_test_config(TestConfig::Uninitialized);
         assert!(match *config.default_behavior.borrow() {
             Some(ExtensionBehavior::Deny) => true,
-            _ => panic!("Default behavior should be 'Deny' or 'ProcessCode'"),
+            _ => panic!("Default behavior should be 'Deny' if not otherwise specified"),
         });
     }
 }
