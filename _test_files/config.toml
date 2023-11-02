@@ -1,5 +1,5 @@
 listen_on = "127.0.0.1"
-serve_root = "/var/www/html"
+serve_root = "./public"
 error_directory = "/var/www/html/errors"
 watch_dirs = [
     "/var/www/html",
