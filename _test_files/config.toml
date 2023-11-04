@@ -7,5 +7,5 @@ watch_dirs = [
 default_behavior = "ProcessCode"
 extension_behaviors = [
     [ ".html", "Fetch" ],
-    [ ".temp", "FetchAndProcessTemplate" ],
+    [ ".temp", "Fetch" ],
 ]

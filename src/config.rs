@@ -1,5 +1,10 @@
 use serde::Deserialize;
-use std::{fs, path::PathBuf, cell::RefCell};
+use std::{
+    fs, 
+    collections::HashMap,
+    path::PathBuf, 
+    cell::RefCell
+};
 use toml;
 
 #[cfg(debug_assertions)]
@@ -12,7 +17,6 @@ pub enum ExtensionBehavior {
     Fetch,                   //Fetch the file and return it
     ProcessCode,             //Map the request to a function
     FetchAndProcessCode,     //Fetch the file and process it with a function
-    FetchAndProcessTemplate, //Fetch the file and process it as a template
 }
 
 #[derive(Deserialize)]
@@ -113,11 +117,24 @@ impl Config {
         }
     }
 
-    pub fn _get_default_behavior(&self)-> ExtensionBehavior {
+    pub fn get_default_behavior(&self)-> ExtensionBehavior {
         match (*self.default_behavior.borrow()).clone() {
             Some(behavior) => behavior,
             None => panic!("Default behavior must be 'Deny' or 'ProcessCode'"),
         }
+    }
+
+    pub fn get_extension_behaviors(&self)-> HashMap<String, ExtensionBehavior> {
+        let mut behaviors = HashMap::new();
+        match &self.extension_behaviors {
+            Some(behaviors_vec) => {
+                for (extension, behavior) in behaviors_vec {
+                    behaviors.insert(extension.clone(), behavior.clone());
+                }
+            },
+            None => (),
+        }
+        behaviors
     }
 }
 
@@ -196,7 +213,7 @@ mod tests {
         let config = get_test_config(TestConfig::Default);
         let serve_root = config.get_serve_root();
         println!("Serve root: {}", serve_root.display());
-        assert_eq!(serve_root, PathBuf::from("/var/www/html"));
+        assert_eq!(serve_root, PathBuf::from("./public"));
 
         //Test from config file, unitialized serve root
         let config = get_test_config(TestConfig::Uninitialized);
