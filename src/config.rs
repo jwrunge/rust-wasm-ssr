@@ -102,10 +102,21 @@ impl Config {
 
     pub fn get_serve_root(&self)-> PathBuf {
         //Get config serve_root; default to "./public"
-        match &self.serve_root {
+        let serve_root = match &self.serve_root {
             Some(s) => PathBuf::from(s),
             None => PathBuf::from("./public"),
-        }
+        };
+
+        println!("Serve root: {}", serve_root.display());
+
+        //Remove trailing slash
+        // let serve_root = if serve_root.ends_with("/") {
+        //     serve_root.parent().expect("Invalid serve_root path").to_path_buf()
+        // } else {
+        //     serve_root
+        // };
+
+        serve_root
     }
 
     pub fn _get_watch_dirs(&self)-> Vec<PathBuf> {

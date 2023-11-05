@@ -20,15 +20,18 @@ async fn main() {
             None => continue,
         };
 
-        //Remove leading . in path_str
-        let path_str = if path_str.starts_with('.') {
-            &path_str[1..]
-        } else {
-            path_str
-        };
+        //Replace backslashes with forward slashes, remove serve_root
+        let path_str = path_str
+            .replace("\\", "/")
+            .replace(
+                match config.get_serve_root().to_str() {
+                    Some(s) => s,
+                    None => continue,
+                }, ""
+            );
 
         println!("Assigning handler for route '{}'", path_str);
-        router = router.route(path_str, handler);
+        router = router.route(&path_str, handler);
     }
 
     router = router.route("/", get(|| async {
