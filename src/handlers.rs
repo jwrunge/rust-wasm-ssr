@@ -17,13 +17,8 @@ pub fn assign_handlers(config: &Config) -> HashMap<PathBuf, MethodRouter> {
         routes.insert(route.0, route.1);
     }
 
-    //Assign code response handler if default_behavior is ProcessCode
-    match config.get_default_behavior() {
-        ExtensionBehavior::ProcessCode => {
-
-        },
-        _ => (),
-    }
+    //Assign code response handlers
+    
 
     routes
 }
@@ -56,10 +51,10 @@ pub fn assign_handler_from_public_static_routes(config: &Config, dir: PathBuf) -
                     //Get behavior for file extension or default
                     let behavior = match file_extension.to_str() {
                         Some(ext) => {
-                            let behaviors = config.get_extension_behaviors();
+                            let behaviors = config.get_routing_extension_behaviors();
                             match behaviors.get(ext) {
                                 Some(behavior) => behavior.clone(),
-                                None => config.get_default_behavior(),
+                                None => config.get_routing_default_behavior(),
                             }
                         },
                         None => continue,
@@ -74,12 +69,6 @@ pub fn assign_handler_from_public_static_routes(config: &Config, dir: PathBuf) -
                         },
                         ExtensionBehavior::Fetch => {
                             println!("Fetching '{}'", path.display());
-                            method = get(|| async {
-                                "Hello, World!"
-                            })
-                        },
-                        ExtensionBehavior::ProcessCode => {
-                            println!("Processing '{}'", path.display());
                             method = get(|| async {
                                 "Hello, World!"
                             })

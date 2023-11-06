@@ -15,8 +15,13 @@ const TEST_CONFIG_PATH: &'static str = "./_test_files/config.toml";
 pub enum ExtensionBehavior {
     Deny,                    //Disallow the extension from returning
     Fetch,                   //Fetch the file and return it
-    ProcessCode,             //Map the request to a function
     FetchAndProcessCode,     //Fetch the file and process it with a function
+}
+
+#[derive(Deserialize)]
+pub struct RoutingOptions {
+    pub default_behavior: RefCell<Option<ExtensionBehavior>>,
+    pub extension_behaviors: RefCell<Option<Vec<(String, ExtensionBehavior)>>>,
 }
 
 #[derive(Deserialize)]
@@ -24,8 +29,7 @@ pub struct Config {
     pub listen_on: Option<String>,
     pub serve_root: Option<String>,
     pub watch_dirs: Option<Vec<String>>,
-    pub default_behavior: RefCell<Option<ExtensionBehavior>>,
-    pub extension_behaviors: Option<Vec<(String, ExtensionBehavior)>>,
+    pub routing: RefCell<Option<RoutingOptions>>,
 }
 
 impl Config {
@@ -38,16 +42,24 @@ impl Config {
             )
             .expect("Unable to parse config file");
 
-        //Make sure default_behavior is correct - must be Deny or ProcessCode; default to Deny
-        let mut set_default_behavior = false;
-        match *config.default_behavior.borrow() {
-            Some(ExtensionBehavior::Deny) => (),
-            Some(ExtensionBehavior::ProcessCode) => (),
-            None => set_default_behavior = true,
-            _ => panic!("Default behavior must be 'Deny' or 'ProcessCode'"),
+        //Set route prop defaults
+        let default_default_behavior = ExtensionBehavior::Deny;
+        let default_extension_behaviors = vec![("html".to_string(), ExtensionBehavior::Fetch)];
+
+        //Set route prop
+        if(*config.routing.borrow()).is_none() {
+            config.set_routing_options(RoutingOptions {
+                default_behavior: RefCell::new(Some(default_default_behavior)),
+                extension_behaviors: RefCell::new(Some(default_extension_behaviors)),
+            });
         }
-        if set_default_behavior {
-            config.set_default_behavior(ExtensionBehavior::Deny);
+        else {
+            if(*config.routing.borrow()).as_ref().unwrap().default_behavior.borrow().is_none() {
+                config.set_routing_default_behavior(default_default_behavior);
+            }
+            if(*config.routing.borrow()).as_ref().unwrap().extension_behaviors.borrow().is_none() {
+                config.set_routing_extension_behaviors(default_extension_behaviors);
+            }
         }
 
         config
@@ -56,8 +68,29 @@ impl Config {
     /*
      * Internal mutations
     */
-    fn set_default_behavior(&self, behavior: ExtensionBehavior) {
-        *self.default_behavior.borrow_mut() = Some(behavior);
+    fn set_routing_options(&self, routing_options: RoutingOptions) {
+        *self.routing.borrow_mut() = Some(routing_options);
+    }
+
+    fn set_routing_default_behavior(&self, behavior: ExtensionBehavior) {
+        //If routing is uninitialized, return
+        if(*self.routing.borrow()).is_none() {
+            return;
+        }
+
+        //Set default behavior
+        *self.routing.borrow_mut().as_mut().unwrap().default_behavior.borrow_mut() = Some(behavior);
+        // *self.routing.borrow_mut().unwrap().default_behavior.borrow_mut() = Some(behavior);
+    }
+
+    fn set_routing_extension_behaviors(&self, behaviors: Vec<(String, ExtensionBehavior)>) {
+        //If routing is uninitialized, return
+        if(*self.routing.borrow()).is_none() {
+            return;
+        }
+
+        //Set extension behaviors
+        *self.routing.borrow_mut().as_mut().unwrap().extension_behaviors.borrow_mut() = Some(behaviors);
     }
 
     /*
@@ -109,13 +142,6 @@ impl Config {
 
         println!("Serve root: {}", serve_root.display());
 
-        //Remove trailing slash
-        // let serve_root = if serve_root.ends_with("/") {
-        //     serve_root.parent().expect("Invalid serve_root path").to_path_buf()
-        // } else {
-        //     serve_root
-        // };
-
         serve_root
     }
 
@@ -128,16 +154,16 @@ impl Config {
         }
     }
 
-    pub fn get_default_behavior(&self)-> ExtensionBehavior {
-        match (*self.default_behavior.borrow()).clone() {
+    pub fn get_routing_default_behavior(&self)-> ExtensionBehavior {
+        match (*self.routing.borrow().as_ref().unwrap().default_behavior.borrow()).clone() {
             Some(behavior) => behavior,
             None => panic!("Default behavior must be 'Deny' or 'ProcessCode'"),
         }
     }
 
-    pub fn get_extension_behaviors(&self)-> HashMap<String, ExtensionBehavior> {
+    pub fn get_routing_extension_behaviors(&self)-> HashMap<String, ExtensionBehavior> {
         let mut behaviors = HashMap::new();
-        match &self.extension_behaviors {
+        match &self.routing.borrow().as_ref().unwrap().extension_behaviors.borrow().clone() {
             Some(behaviors_vec) => {
                 for (extension, behavior) in behaviors_vec {
                     behaviors.insert(extension.clone(), behavior.clone());
@@ -237,16 +263,16 @@ mod tests {
     fn test_behaviors() {
         //Test default behavior from standard config file
         let config = get_test_config(TestConfig::Default);
-        assert!(match *config.default_behavior.borrow() {
-            Some(ExtensionBehavior::ProcessCode) => true,
-            _ => panic!("Default behavior should be 'Deny' or 'ProcessCode'"),
+        assert!(match *config.routing.borrow().as_ref().unwrap().default_behavior.borrow() {
+            Some(ExtensionBehavior::Fetch) => true,
+            _ => panic!("Default behavior is invalid; should be 'Deny', 'Fetch', or 'FetchAndProcessCode'"),
         });
 
         //Test default behavior from config file, unitialized default behavior
         let config = get_test_config(TestConfig::Uninitialized);
-        assert!(match *config.default_behavior.borrow() {
+        assert!(match *config.routing.borrow().as_ref().unwrap().default_behavior.borrow() {
             Some(ExtensionBehavior::Deny) => true,
-            _ => panic!("Default behavior should be 'Deny' if not otherwise specified"),
+            _ => panic!("Default behavior is invalid; should be 'Deny', 'Fetch', or 'FetchAndProcessCode'"),
         });
     }
 }

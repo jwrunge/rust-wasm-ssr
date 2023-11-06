@@ -34,9 +34,6 @@ async fn main() {
         router = router.route(&path_str, handler);
     }
 
-    router = router.route("/", get(|| async {
-        "Hello, YOU!"
-    }));
     //Startup mssage
     {
         let listen_on = config.get_listen_on();

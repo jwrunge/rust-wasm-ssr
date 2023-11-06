@@ -4,7 +4,9 @@ error_directory = "/var/www/html/errors"
 watch_dirs = [
     "/var/www/html",
 ]
-default_behavior = "ProcessCode"
+
+[routing]
+default_behavior = "Fetch"
 extension_behaviors = [
     [ ".html", "Fetch" ],
     [ ".temp", "Fetch" ],
